@@ -1,6 +1,6 @@
 {
-  "name": "P2P Web Node Chat",
-  "short_name": "WebNode",
+  "name": "P2P Node Communicator",
+  "short_name": "NodeP2P",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#121212",
