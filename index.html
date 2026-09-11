@@ -3,41 +3,50 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>P2P Short-Code Node Link</title>
+  <title>P2P Node Communicator</title>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#121212">
-  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <!-- Load PeerJS Library with Fallbacks -->
+  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <style>
+    * { box-sizing: border-box; }
     body { font-family: monospace; background: #121212; color: #00ff66; margin: 0; padding: 16px; }
-    .card { background: #1e1e1e; padding: 12px; border-radius: 8px; margin-bottom: 12px; border: 1px solid #333; }
-    input, button { background: #222; color: #fff; border: 1px solid #444; padding: 8px; border-radius: 4px; font-family: monospace; }
-    button { background: #00ff66; color: #000; font-weight: bold; cursor: pointer; }
-    #chat { height: 250px; overflow-y: auto; background: #000; padding: 10px; border-radius: 4px; border: 1px solid #222; }
-    .msg { margin-bottom: 10px; border-bottom: 1px dashed #333; padding-bottom: 5px; }
+    h2 { margin-top: 0; color: #fff; }
+    .card { background: #1e1e1e; padding: 16px; border-radius: 8px; margin-bottom: 12px; border: 1px solid #333; }
+    input, button { background: #222; color: #fff; border: 1px solid #444; padding: 10px; border-radius: 4px; font-family: monospace; }
+    button { background: #00ff66; color: #000; font-weight: bold; cursor: pointer; border: none; }
+    button:hover { background: #00cc52; }
+    #chat { height: 260px; overflow-y: auto; background: #000; padding: 10px; border-radius: 4px; border: 1px solid #222; }
+    .msg { margin-bottom: 10px; border-bottom: 1px dashed #333; padding-bottom: 6px; }
     .label { color: #888; font-size: 0.85em; }
     .val { color: #00e5ff; word-break: break-all; }
     .code-box { font-size: 1.4em; color: #00e5ff; letter-spacing: 2px; font-weight: bold; }
+    .status { font-size: 0.9em; color: #ffbb00; margin-top: 8px; }
   </style>
 </head>
 <body>
 
   <h2>P2P Short-Code Node Link</h2>
 
-  <!-- Role & Short-Code Interface -->
+  <!-- Setup Section -->
   <div class="card" id="setup-card">
     <div><strong>Host Node Code:</strong> <span id="my-code" class="code-box">Generating...</span></div>
+    <div id="status-text" class="status">Connecting to signaling network...</div>
     <br><hr style="border:0; border-top: 1px dashed #333;"><br>
-    <label>Connect to Host Node Code (8 Characters):</label><br><br>
+    
+    <label>Connect to Remote Host Code (8 Characters):</label><br><br>
     <input type="text" id="target-code" maxlength="8" placeholder="e.g. A8K92X1M" style="text-transform:uppercase; width:150px;">
     <button onclick="connectToHost()">Connect</button>
   </div>
 
-  <!-- Chat & Telemetry View -->
+  <!-- Real-Time Chat & Telemetry UI -->
   <div class="card" id="chat-card" style="display:none;">
     <div id="chat"></div>
     <br>
-    <input type="text" id="msg-input" placeholder="Type message..." style="width: 70%;">
-    <button onclick="sendMessage()">Send</button>
+    <div style="display: flex; gap: 8px;">
+      <input type="text" id="msg-input" placeholder="Type message..." style="flex-grow: 1;">
+      <button onclick="sendMessage()">Send</button>
+    </div>
   </div>
 
   <script>
@@ -45,7 +54,7 @@
     let conn;
     const SHARED_KEY = "MySecretKey123";
 
-    // Generate random 8-character alphanumeric ID (A-Z, 0-9)
+    // 1. Generate 8-character Alphanumeric ID
     function generate8CharID() {
       const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
       let result = '';
@@ -57,11 +66,26 @@
 
     const nodeID = generate8CharID();
 
-    // Initialize PeerJS Node with 8-character ID
-    peer = new Peer(nodeID);
+    // 2. Initialize PeerJS with public STUN fallbacks for high-reliability WebRTC
+    peer = new Peer(nodeID, {
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+      }
+    });
 
     peer.on('open', (id) => {
       document.getElementById('my-code').innerText = id;
+      document.getElementById('status-text').innerText = "Node Ready. Waiting for connection or enter code below.";
+      document.getElementById('status-text').style.color = "#00ff66";
+    });
+
+    peer.on('error', (err) => {
+      console.error("PeerJS Error:", err);
+      document.getElementById('status-text').innerText = "Signal error: " + err.type;
+      document.getElementById('status-text').style.color = "#ff4444";
     });
 
     // Handle Incoming Connection (Host Mode)
@@ -73,13 +97,17 @@
     // Connect to Remote Host (Client Mode)
     function connectToHost() {
       const remoteID = document.getElementById('target-code').value.trim().toUpperCase();
-      if (remoteID.length !== 8) return alert("Please enter a valid 8-character code.");
+      if (remoteID.length !== 8) {
+        alert("Please enter a valid 8-character code.");
+        return;
+      }
 
+      document.getElementById('status-text').innerText = "Handshaking with " + remoteID + "...";
       conn = peer.connect(remoteID);
       setupDataChannel();
     }
 
-    // RC4 Cipher Implementation
+    // --- RC4 Encryption Core ---
     function rc4(key, str) {
       let s = [], j = 0, x, res = '';
       for (let i = 0; i < 256; i++) s[i] = i;
@@ -106,6 +134,7 @@
       return arr.map(h => String.fromCharCode(parseInt(h, 16))).join('');
     }
 
+    // --- WebRTC Event Handlers ---
     function setupDataChannel() {
       conn.on('open', () => {
         document.getElementById('setup-card').style.display = 'none';
@@ -118,6 +147,11 @@
         const decrypted = rc4(SHARED_KEY, rawCipher);
 
         appendLog("INBOUND (Received)", decrypted, payload.encryptedHex, payload.rsStream);
+      });
+
+      conn.on('close', () => {
+        alert("Peer disconnected.");
+        location.reload();
       });
     }
 
@@ -144,14 +178,15 @@
       chat.innerHTML += `
         <div class="msg">
           <strong style="color:#fff;">[${dir}]</strong><br>
-          <span class="label">Decrypted/Plaintext :</span> <span class="val">"${plain}"</span><br>
-          <span class="label">RC4 Encrypted (Hex)  :</span> <span class="val">${enc}</span><br>
-          <span class="label">Reed-Solomon Stream :</span> <span class="val">${rs}</span>
+          <span class="label">Decrypted / Plaintext :</span> <span class="val">"${plain}"</span><br>
+          <span class="label">RC4 Encrypted (Hex)   :</span> <span class="val">${enc}</span><br>
+          <span class="label">Reed-Solomon Stream  :</span> <span class="val">${rs}</span>
         </div>
       `;
       chat.scrollTop = chat.scrollHeight;
     }
 
+    // Service Worker Registration for PWA caching
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js');
     }
