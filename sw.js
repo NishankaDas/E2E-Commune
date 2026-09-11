@@ -1,6 +1,8 @@
+const CACHE_NAME = 'pwa-node-v3';
+
 self.addEventListener('install', (e) => {
   e.waitUntil(
-    caches.open('pwa-node-v1').then((cache) => cache.addAll([
+    caches.open(CACHE_NAME).then((cache) => cache.addAll([
       './',
       './index.html',
       './manifest.json'
